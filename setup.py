@@ -30,6 +30,7 @@ BUID_CUDA_EXT = bool(CUDA_HOME or ROCM_HOME)
 DEBUG = os.getenv("DEBUG", "0") == "1"
 NO_OCEAN = os.getenv("NO_OCEAN", "0") == "1"
 NO_TRAIN = os.getenv("NO_TRAIN", "0") == "1"
+COVERAGE_C = os.getenv("COVERAGE_C", "0") == "1"
 
 # Build raylib for your platform
 RAYLIB_URL = 'https://github.com/raysan5/raylib/releases/download/5.5/'
@@ -142,6 +143,18 @@ elif system == 'Darwin':
     ]
 else:
     raise ValueError(f'Unsupported system: {system}')
+
+# Build with COVERAGE_C=1 to enable C/C++ code coverage
+if COVERAGE_C:
+    print('Building with C/C++ coverage enabled')
+    extra_compile_args += [
+        '-fprofile-arcs',
+        '-ftest-coverage',
+        '-O0',  # Disable optimization for accurate coverage
+    ]
+    extra_link_args += [
+        '--coverage',  # Links with gcov
+    ]
 
 # Default Gym/Gymnasium/PettingZoo versions
 # Gym:

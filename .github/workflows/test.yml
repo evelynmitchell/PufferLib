@@ -46,7 +46,7 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          pip install pytest pytest-cov pytest-timeout
+          pip install pytest pytest-cov pytest-timeout gcovr
           pip install gymnasium pettingzoo
 
       - name: Run core emulation tests
@@ -91,18 +91,41 @@ jobs:
           "
         timeout-minutes: 3
 
-      - name: Generate coverage report
+      - name: Generate Python coverage report
         run: |
           coverage report -m
           coverage html
           coverage xml
 
-      - name: Upload coverage HTML report
+      - name: Rebuild with C coverage enabled
+        if: matrix.py == '3.12'
+        run: COVERAGE_C=1 pip install -e . --no-build-isolation --force-reinstall --no-deps
+
+      - name: Run tests for C coverage
+        if: matrix.py == '3.12'
+        run: pytest tests/test_env_binding.py -v
+        timeout-minutes: 3
+
+      - name: Generate C coverage report
+        if: matrix.py == '3.12'
+        run: |
+          gcovr --print-summary
+          gcovr --html --html-details -o htmlcov-c/index.html
+          gcovr --xml -o coverage-c.xml
+
+      - name: Upload Python coverage HTML report
         uses: actions/upload-artifact@v3
         if: matrix.py == '3.12'
         with:
-          name: coverage-report-${{ matrix.os }}-py${{ matrix.py }}
+          name: coverage-python-${{ matrix.os }}-py${{ matrix.py }}
           path: htmlcov/
+
+      - name: Upload C coverage HTML report
+        uses: actions/upload-artifact@v3
+        if: matrix.py == '3.12'
+        with:
+          name: coverage-c-${{ matrix.os }}-py${{ matrix.py }}
+          path: htmlcov-c/
 
   test-optional-envs:
     name: test optional environments
