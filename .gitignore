@@ -55,6 +55,7 @@ pip-delete-this-directory.txt
 
 # Unit test / coverage reports
 htmlcov/
+htmlcov-c/
 .tox/
 .nox/
 .coverage
@@ -62,10 +63,16 @@ htmlcov/
 .cache
 nosetests.xml
 coverage.xml
+coverage-c.xml
 *.cover
 *.py,cover
 .hypothesis/
 .pytest_cache/
+
+# C/C++ coverage files
+*.gcda
+*.gcno
+*.gcov
 
 # Translations
 *.mo

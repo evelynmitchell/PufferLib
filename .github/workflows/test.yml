@@ -1,0 +1,236 @@
+name: tests
+
+on:
+  workflow_dispatch:  # Manual trigger
+  pull_request:
+  push:
+    branches:
+      - main
+      - 3.0
+      - dev
+
+jobs:
+  test-latest:
+    name: test py3.12 - ubuntu-latest
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Upgrade pip
+        run: python -m pip install -U pip
+
+      - name: Install build dependencies
+        run: pip install --upgrade "setuptools>=69.0.0" "packaging>=24.2" "numpy<2.0" wheel
+
+      - name: Install PyTorch CPU
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install pufferlib
+        run: pip install -e . --no-build-isolation
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-cov pytest-timeout gcovr
+          pip install gymnasium pettingzoo
+
+      - name: Run core emulation tests
+        run: python tests/test.py
+        timeout-minutes: 5
+
+      - name: Run API usage tests
+        run: python tests/test_api.py
+        timeout-minutes: 3
+
+      - name: Run PyTorch utility tests
+        run: pytest tests/test_pytorch.py -v --cov=pufferlib --cov-append --cov-report=xml
+        timeout-minutes: 3
+
+      - name: Run extension tests
+        run: python tests/test_extensions.py
+        timeout-minutes: 3
+
+      - name: Test Ocean environment imports
+        run: |
+          python -c "from pufferlib.ocean import env_creator; env = env_creator('puffer_snake')(); env.reset(); print('Snake OK')"
+          python -c "from pufferlib.ocean import env_creator; env = env_creator('puffer_tetris')(); env.reset(); print('Tetris OK')"
+          python -c "from pufferlib.ocean import env_creator; env = env_creator('puffer_breakout')(); env.reset(); print('Breakout OK')"
+        timeout-minutes: 3
+
+      - name: Test basic training API
+        run: |
+          python -c "
+          import pufferlib.pufferl as pufferl
+
+          # Test config loading
+          args = pufferl.load_config('puffer_snake')
+          print('Config loaded:', args['base']['env_name'])
+
+          # Test environment loading
+          args['vec']['num_envs'] = 2
+          args['vec']['num_workers'] = 2
+          vecenv = pufferl.load_env('puffer_snake', args)
+          vecenv.reset()
+          vecenv.close()
+          print('Environment vectorization OK')
+          "
+        timeout-minutes: 3
+
+      - name: Generate Python coverage report
+        run: |
+          coverage report -m
+          coverage html
+          coverage xml
+
+      - name: Rebuild with C coverage enabled
+        run: COVERAGE_C=1 pip install -e . --no-build-isolation --force-reinstall --no-deps
+
+      - name: Run tests for C coverage
+        run: pytest tests/test_env_binding.py -v
+        timeout-minutes: 3
+
+      - name: Generate C coverage report
+        run: |
+          gcovr --print-summary
+          gcovr --html --html-details -o htmlcov-c/index.html
+          gcovr --xml -o coverage-c.xml
+
+      - name: Upload Python coverage HTML report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-python-ubuntu-py3.12
+          path: htmlcov/
+
+      - name: Upload C coverage HTML report
+        uses: actions/upload-artifact@v3
+        with:
+          name: coverage-c-ubuntu-py3.12
+          path: htmlcov-c/
+
+  test-compatibility:
+    name: test py${{ matrix.py }} - ubuntu-latest
+    runs-on: ubuntu-latest
+    # Only run compatibility tests on main branches, releases, or manual trigger
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/3.0' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        py:
+          - "3.11"
+          - "3.10"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.py }}
+
+      - name: Upgrade pip
+        run: python -m pip install -U pip
+
+      - name: Install build dependencies
+        run: pip install --upgrade "setuptools>=69.0.0" "packaging>=24.2" "numpy<2.0" wheel
+
+      - name: Install PyTorch CPU
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install pufferlib
+        run: pip install -e . --no-build-isolation
+
+      - name: Install test dependencies
+        run: |
+          pip install pytest pytest-timeout
+          pip install gymnasium pettingzoo
+
+      - name: Run core emulation tests
+        run: python tests/test.py
+        timeout-minutes: 5
+
+      - name: Run API usage tests
+        run: python tests/test_api.py
+        timeout-minutes: 3
+
+      - name: Run PyTorch utility tests
+        run: pytest tests/test_pytorch.py -v
+        timeout-minutes: 3
+
+      - name: Run extension tests
+        run: python tests/test_extensions.py
+        timeout-minutes: 3
+
+      - name: Test Ocean environment imports
+        run: |
+          python -c "from pufferlib.ocean import env_creator; env = env_creator('puffer_snake')(); env.reset(); print('Snake OK')"
+          python -c "from pufferlib.ocean import env_creator; env = env_creator('puffer_tetris')(); env.reset(); print('Tetris OK')"
+          python -c "from pufferlib.ocean import env_creator; env = env_creator('puffer_breakout')(); env.reset(); print('Breakout OK')"
+        timeout-minutes: 3
+
+      - name: Test basic training API
+        run: |
+          python -c "
+          import pufferlib.pufferl as pufferl
+
+          # Test config loading
+          args = pufferl.load_config('puffer_snake')
+          print('Config loaded:', args['base']['env_name'])
+
+          # Test environment loading
+          args['vec']['num_envs'] = 2
+          args['vec']['num_workers'] = 2
+          vecenv = pufferl.load_env('puffer_snake', args)
+          vecenv.reset()
+          vecenv.close()
+          print('Environment vectorization OK')
+          "
+        timeout-minutes: 3
+
+  test-optional-envs:
+    name: test optional environments
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        env:
+          - atari
+          - procgen
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      - name: Upgrade pip
+        run: python -m pip install -U pip
+
+      - name: Install build dependencies
+        run: pip install --upgrade "setuptools>=69.0.0" "packaging>=24.2" "numpy<2.0" wheel
+
+      - name: Install PyTorch CPU
+        run: pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+      - name: Install pufferlib with environment extras
+        run: pip install -e .[${{ matrix.env }}] --no-build-isolation
+
+      - name: Test environment import
+        run: |
+          python -c "
+          from pufferlib.environments import ${{ matrix.env }}
+          env = ${{ matrix.env }}.env_creator()()
+          env.reset()
+          env.close()
+          print('${{ matrix.env }} environment OK')
+          "
+        timeout-minutes: 3
