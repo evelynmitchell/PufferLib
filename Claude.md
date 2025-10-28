@@ -357,6 +357,48 @@ This repository uses GitHub Actions with **three levels of CI/CD**:
 - `.github/workflows/rust-ci.yml` - Rust pipeline
 - `.github/workflows/docs.yml` - Documentation deployment
 
+#### CI Matrix Optimization Pattern
+
+**Problem**: Running tests on multiple Python versions (3.10, 3.11, 3.12) on every PR is slow and expensive.
+
+**Solution**: Split testing into fast path and full path:
+
+**Fast Path** (PRs, feature branches):
+```yaml
+test-latest:
+  name: test py3.12
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/setup-python@v4
+      with:
+        python-version: "3.12"
+    # All tests + coverage
+```
+
+**Full Matrix** (main, releases only):
+```yaml
+test-compatibility:
+  name: test py${{ matrix.py }}
+  runs-on: ubuntu-latest
+  if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/3.0' || startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch'
+  strategy:
+    matrix:
+      py: ["3.11", "3.10"]
+  steps:
+    # Same tests, no coverage (already collected from latest)
+```
+
+**Benefits**:
+- **Faster feedback**: 5-7 minutes instead of 15-20 minutes for PRs
+- **Lower cost**: 1 job instead of 3 for development
+- **Same quality**: Full compatibility tests run before merges to main
+- **Focused coverage**: Only collect metrics once (Python 3.12)
+
+**When to use**:
+- Projects supporting multiple language versions
+- High PR velocity where CI time matters
+- Stable codebases where version compatibility issues are rare
+
 
 ### Pre-commit Hooks
 
