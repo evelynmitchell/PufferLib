@@ -46,7 +46,7 @@ jobs:
 
       - name: Install test dependencies
         run: |
-          pip install pytest
+          pip install pytest pytest-cov pytest-timeout
           pip install gymnasium pettingzoo
 
       - name: Run core emulation tests
@@ -58,7 +58,7 @@ jobs:
         timeout-minutes: 3
 
       - name: Run PyTorch utility tests
-        run: pytest tests/test_pytorch.py -v
+        run: pytest tests/test_pytorch.py -v --cov=pufferlib --cov-append --cov-report=xml
         timeout-minutes: 3
 
       - name: Run extension tests
@@ -90,6 +90,19 @@ jobs:
           print('Environment vectorization OK')
           "
         timeout-minutes: 3
+
+      - name: Generate coverage report
+        run: |
+          coverage report -m
+          coverage html
+          coverage xml
+
+      - name: Upload coverage HTML report
+        uses: actions/upload-artifact@v3
+        if: matrix.py == '3.12'
+        with:
+          name: coverage-report-${{ matrix.os }}-py${{ matrix.py }}
+          path: htmlcov/
 
   test-optional-envs:
     name: test optional environments

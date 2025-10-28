@@ -233,6 +233,12 @@ cleanrl = [
     'tyro==0.8.6',
 ]
 
+test = [
+    'pytest>=8.0.0',
+    'pytest-cov>=4.1.0',
+    'pytest-timeout>=2.2.0',
+]
+
 [project.scripts]
 puffer = "pufferlib.pufferl:main"
 
@@ -248,3 +254,52 @@ no-build-isolation-package = ["torch"]
 
 [tool.setuptools]
 license-files = ["LICENSE"]
+
+[tool.coverage.run]
+source = ["pufferlib"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/ocean/*",  # C extensions, measured separately
+    "*/extensions/*",  # C/CUDA extensions
+    "setup.py",
+]
+parallel = true
+branch = true
+
+[tool.coverage.report]
+precision = 2
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov=pufferlib",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "cuda: marks tests requiring CUDA",
+    "optional: marks tests for optional dependencies",
+]
